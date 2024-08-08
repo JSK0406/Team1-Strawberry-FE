@@ -1,10 +1,12 @@
-import React, { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect } from "react";
 import rough from "roughjs/bundled/rough.esm";
 
-import styled from "styled-components";
-import { Label, theme, Wrapper } from "../../../core/design_system";
+import { useDrawingPlayDispatch } from "./useDrawingPlayDispatch";
+import { useDrawingPlayState } from "../hooks/useDrawingPlayState";
 
 import santafeLineBG from "/src/assets/images/background/santafeLineBG.svg";
+import interiorLineBG from "/src/assets/images/background/interiorLineBG.svg";
+import exteriorLineBG from "/src/assets/images/background/exteriorLineBG.svg";
 
 type Point = { x: number; y: number };
 type LineStyle = {
@@ -25,14 +27,17 @@ const customLineStyle: LineStyle = {
   strokeWidth: 5,
 };
 
-const DrawingCanvas: React.FC<{
-  timeLimit?: number;
-  startTimer?: () => void;
-}> = ({ timeLimit = 10, startTimer }) => {
+export function useDrawingCanvas(timeLimit = 10) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const [userPoints, setUserPoints] = useState<Point[]>([]);
+  const userPointsRef = useRef<Point[]>([]);
   const [timer, setTimer] = useState(timeLimit);
+  const imgPaths = ["", santafeLineBG, interiorLineBG, exteriorLineBG];
+  let id;
+
+  const { stage } = useDrawingPlayState();
+  const dispatch = useDrawingPlayDispatch();
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -45,13 +50,37 @@ const DrawingCanvas: React.FC<{
   useEffect(() => {
     if (timer === 0) {
       setIsDrawing(false);
-      console.log(userPoints);
     }
   }, [timer]);
 
+  useEffect(() => {
+    if (userPoints.length > 0) {
+      console.log(userPoints);
+    }
+    userPointsRef.current = userPoints; // 최신의 userPoints를 ref에 저장
+  }, [userPoints]);
+
+  const setPlayTimeout = () => {
+    dispatch({ type: "SET_START_DRAWING" });
+    id = setTimeout(() => {
+      dispatch({ type: "SET_FINISH_DRAWING" });
+      dispatch({ type: "SET_RESULT" });
+      const canvasImage = canvasRef.current?.toDataURL("image/png"); // 캔버스를 이미지로 변환
+      dispatch({
+        type: "SET_CANVAS_IMG",
+        payload: canvasImage || "",
+      });
+    }, 7000);
+    return () => {
+      clearTimeout(id);
+    }; // 필요할 때 타이머를 취소하도록 함수 반환
+  };
+
   const startDrawing = () => {
-    startTimer?.();
+    console.log("down");
+    setPlayTimeout();
     setUserPoints([]);
+    userPointsRef.current = []; // ref도 초기화
     setTimer(timeLimit);
     setIsDrawing(true); // 버튼 클릭 시 드로잉 상태를 활성화
 
@@ -66,19 +95,20 @@ const DrawingCanvas: React.FC<{
   };
 
   const stopDrawing = () => {
-    console.log(userPoints);
-    setUserPoints([]);
-    setIsDrawing(false);
+    setTimeout(() => {
+      dispatch({ type: "SET_FINISH_DRAWING" });
+      dispatch({ type: "SET_RESULT" });
+      const canvasImage = canvasRef.current?.toDataURL("image/png"); // 캔버스를 이미지로 변환
+      dispatch({
+        type: "SET_CANVAS_IMG",
+        payload: canvasImage || "",
+      });
+      clearTimeout(id);
+    }, 100);
   };
 
-  useEffect(() => {
-    if (!isDrawing) {
-      console.log(userPoints);
-      setUserPoints([]);
-    }
-  }, [isDrawing]);
-
   const handleMouseDown = (e: React.MouseEvent) => {
+    console.log("down");
     if (isDrawing) {
       const rect = canvasRef.current?.getBoundingClientRect();
       if (rect) {
@@ -89,7 +119,18 @@ const DrawingCanvas: React.FC<{
     }
   };
 
-  const handleMouseUp = () => {
+  const handleClick = () => {
+    console.log("click");
+    setTimeout(() => {
+      if (isDrawing) {
+        stopDrawing();
+      }
+    }, 100);
+  };
+
+  const handleMouseUp = (e: MouseEvent) => {
+    e.preventDefault();
+    console.log("up");
     if (isDrawing) {
       stopDrawing();
     }
@@ -131,67 +172,14 @@ const DrawingCanvas: React.FC<{
     }
   };
 
-  return (
-    <Wrapper
-      $position="relative"
-      width="938px"
-      height="513px"
-      display="flex"
-      $flexdirection="column"
-      $justifycontent="center"
-      $alignitems="center"
-    >
-      <StyledImage src={santafeLineBG} alt="Car" />
-      <StyledCanvas
-        ref={canvasRef}
-        width={938}
-        height={513}
-        onMouseDown={handleMouseDown}
-        onMouseUp={handleMouseUp}
-        onMouseMove={handleMouseMove}
-      />
-      <Wrapper
-        display="flex"
-        $flexdirection="row"
-        $alignitems="center"
-        $position="absolute"
-        $top="280px"
-        left="43px"
-        height="fit-content"
-      >
-        <StartButton onClick={startDrawing} disabled={isDrawing} />
-        <Label
-          $token="Body2Medium"
-          color={theme.Color.TextIcon.info}
-          $margin="0 0 0 5px"
-        >
-          start
-        </Label>
-      </Wrapper>
-    </Wrapper>
-  );
-};
-
-export default DrawingCanvas;
-
-const StartButton = styled.button`
-  width: 12px;
-  height: 12px;
-  border-radius: 12px;
-  background-color: ${({ theme }) => theme.Color.TextIcon.info};
-  border: none;
-  cursor: pointer;
-  z-index: 10;
-`;
-
-const StyledCanvas = styled.canvas`
-  position: absolute;
-  top: 0;
-  left: 0;
-  z-index: 10;
-`;
-
-const StyledImage = styled.img`
-  width: 90%;
-  height: 90%;
-`;
+  return {
+    canvasRef,
+    isDrawing,
+    imgPath: imgPaths[stage],
+    startDrawing,
+    handleClick,
+    handleMouseDown,
+    handleMouseUp,
+    handleMouseMove,
+  };
+}
