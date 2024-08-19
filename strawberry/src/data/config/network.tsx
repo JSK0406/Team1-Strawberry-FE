@@ -41,7 +41,7 @@ function buildURL(
   return finalURL;
 }
 
-interface BaseError {
+export interface BaseError {
   status: number;
   message: string;
 }
@@ -51,7 +51,7 @@ interface BaseConstructor extends ErrorConstructor {
   (status?: string, message?: string): BaseError;
 }
 
-export declare const BaseError: BaseConstructor;
+declare const BaseError: BaseConstructor;
 
 async function handleError(response: Response): Promise<never> {
   if (response.status === 401) {
