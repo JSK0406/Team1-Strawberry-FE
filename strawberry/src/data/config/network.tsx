@@ -41,13 +41,28 @@ function buildURL(
   return finalURL;
 }
 
+interface BaseError {
+  status: number;
+  message: string;
+}
+
+interface BaseConstructor extends ErrorConstructor {
+  new(status?: number, message?: string): BaseError;
+  (status?: string, message?: string): BaseError;
+}
+
+export declare const BaseError: BaseConstructor;
+
 async function handleError(response: Response): Promise<never> {
   if (response.status === 401) {
     throw new Error("TOKEN_ERROR");
   } else if (response.status >= 500) {
     throw new Error("NETWORK_ERROR");
   }
-  throw new Error("UNKNOWN_ERROR");
+
+  const result: BaseError = await response.json();
+  console.log(result);
+  throw new BaseError(response.status, result.message);
 }
 
 function makeHeader(): HeadersInit {
